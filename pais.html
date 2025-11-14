@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Castillos por país</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <h1 class="hero__title" id="country-title">Castillos por país</h1>
+      <p class="hero__lead" id="country-description">
+        Selecciona un país desde el listado general para ver sus castillos destacados.
+      </p>
+      <p>
+        <a href="index.html" style="color: #fff; font-weight: 600"
+          >&larr; Volver al atlas completo</a
+        >
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="section-card">
+        <h2 class="section-card__title">Castillos disponibles</h2>
+        <div class="filters">
+          <div>
+            <label for="search-country">Buscar dentro del país</label>
+            <input
+              id="search-country"
+              type="text"
+              placeholder="Escribe un nombre"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+
+        <div class="status-bar">
+          <div id="results-country">Selecciona un país…</div>
+          <div class="pagination">
+            <button id="prev-country" type="button" disabled>&larr; Anterior</button>
+            <span id="pagination-country">Página 1</span>
+            <button id="next-country" type="button" disabled>Siguiente &rarr;</button>
+          </div>
+        </div>
+
+        <div class="table-shell" aria-live="polite">
+          <div class="loader" id="loader-country">Esperando datos…</div>
+          <table class="data-table" id="table-country" hidden>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Región</th>
+                <th>UNESCO</th>
+                <th>Estilo</th>
+                <th>Ficha</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="castillos-data.js"></script>
+    <script src="imagenes-castillos.js"></script>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const countryName = params.get("nombre");
+
+      const ui = {
+        title: document.getElementById("country-title"),
+        description: document.getElementById("country-description"),
+        search: document.getElementById("search-country"),
+        results: document.getElementById("results-country"),
+        paginationInfo: document.getElementById("pagination-country"),
+        prev: document.getElementById("prev-country"),
+        next: document.getElementById("next-country"),
+        table: document.getElementById("table-country"),
+        tbody: document.querySelector("#table-country tbody"),
+        loader: document.getElementById("loader-country"),
+      };
+
+      const state = {
+        data: [],
+        filtered: [],
+        page: 1,
+        pageSize: 20,
+      };
+
+      const waitForDataset = (timeout = 10000) =>
+        new Promise((resolve, reject) => {
+          const start = performance.now();
+          const check = () => {
+            if (Array.isArray(window.CASTLES_DATA)) {
+              resolve(window.CASTLES_DATA);
+            } else if (performance.now() - start >= timeout) {
+              reject(new Error("No se pudo cargar la base de datos."));
+            } else {
+              requestAnimationFrame(check);
+            }
+          };
+          check();
+        });
+
+      const renderTable = () => {
+        if (!state.filtered.length) {
+          ui.tbody.innerHTML =
+            '<tr><td colspan="5">No hay castillos que coincidan con tu búsqueda.</td></tr>';
+          ui.results.textContent = "Sin resultados";
+          ui.paginationInfo.textContent = "Página 1";
+          ui.prev.disabled = true;
+          ui.next.disabled = true;
+          return;
+        }
+
+        const totalPages = Math.ceil(state.filtered.length / state.pageSize) || 1;
+        state.page = Math.min(Math.max(state.page, 1), totalPages);
+
+        const start = (state.page - 1) * state.pageSize;
+        const end = start + state.pageSize;
+        const slice = state.filtered.slice(start, end);
+
+        ui.tbody.innerHTML = slice
+          .map(
+            (castle) => `
+            <tr>
+              <td class="castle-name">
+                <img src="${encodeURI(
+                  castle.imagen
+                )}" alt="Castillo ${castle.nombre}" class="castle-thumb" />
+                <span>${castle.nombre}</span>
+              </td>
+              <td>${castle.region}</td>
+              <td>${castle.patrimonio_unesco === "True" ? "Sí" : "No"}</td>
+              <td>${castle.estilo_arquitectonico}</td>
+              <td>
+                <button class="details-btn" data-id="${castle.id}">Ver ficha</button>
+              </td>
+            </tr>
+          `
+          )
+          .join("");
+
+        ui.results.textContent = `Mostrando ${start + 1}–${Math.min(
+          end,
+          state.filtered.length
+        )} de ${state.filtered.length} castillos`;
+        ui.paginationInfo.textContent = `Página ${state.page} de ${totalPages}`;
+        ui.prev.disabled = state.page === 1;
+        ui.next.disabled = state.page === totalPages;
+      };
+
+      const applySearch = () => {
+        const term = ui.search.value.trim().toLowerCase();
+        state.filtered = state.data.filter((castle) =>
+          castle.nombre.toLowerCase().includes(term)
+        );
+        state.page = 1;
+        renderTable();
+      };
+
+      const init = async () => {
+        if (!countryName) {
+          ui.loader.textContent = "No se especificó ningún país.";
+          return;
+        }
+
+        ui.title.textContent = `Castillos de ${countryName}`;
+        ui.description.textContent = `Listado completo de fortalezas registradas en ${countryName}.`;
+
+        try {
+          const dataset = await waitForDataset();
+          state.data = dataset.filter((castle) => castle.pais === countryName);
+
+          if (!state.data.length) {
+            ui.loader.textContent = "No hay datos disponibles para este país.";
+            return;
+          }
+
+          state.filtered = [...state.data];
+          ui.loader.hidden = true;
+          ui.table.hidden = false;
+          renderTable();
+        } catch (error) {
+          ui.loader.textContent = error.message;
+        }
+      };
+
+      ui.search.addEventListener("input", applySearch);
+      ui.prev.addEventListener("click", () => {
+        if (state.page > 1) {
+          state.page -= 1;
+          renderTable();
+        }
+      });
+      ui.next.addEventListener("click", () => {
+        const totalPages = Math.ceil(state.filtered.length / state.pageSize);
+        if (state.page < totalPages) {
+          state.page += 1;
+          renderTable();
+        }
+      });
+
+      document
+        .querySelector(".table-shell")
+        .addEventListener("click", (event) => {
+          const button = event.target.closest(".details-btn");
+          if (!button) return;
+          const id = button.dataset.id;
+          window.location.href = `detalle.html?id=${encodeURIComponent(id)}`;
+        });
+
+      init();
+    </script>
+  </body>
+</html>
