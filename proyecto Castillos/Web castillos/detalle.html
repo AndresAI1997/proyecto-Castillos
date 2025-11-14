@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ficha del castillo</title>
+    <link rel="stylesheet" href="detalle.css" />
+  </head>
+  <body>
+    <div class="detail-wrapper">
+      <a class="back-link" href="index.html">&larr; Volver al listado</a>
+      <div class="card" id="card" aria-live="polite">
+        <h1>Buscando castillo…</h1>
+        <p>Estamos cargando los datos más recientes para esta ficha.</p>
+      </div>
+    </div>
+
+    <script src="castillos-data.js"></script>
+    <script src="imagenes-castillos.js"></script>
+    <script>
+      const card = document.getElementById("card");
+      const params = new URLSearchParams(window.location.search);
+      const castleId = params.get("id");
+
+      const renderError = (message) => {
+        card.innerHTML = `
+          <div class="error">${message}</div>
+        `;
+      };
+
+      const waitForDataset = (timeout = 10000) =>
+        new Promise((resolve, reject) => {
+          const start = performance.now();
+          const check = () => {
+            if (Array.isArray(window.CASTLES_DATA)) {
+              resolve(window.CASTLES_DATA);
+            } else if (performance.now() - start >= timeout) {
+              reject(new Error("No se pudo cargar la base de datos."));
+            } else {
+              requestAnimationFrame(check);
+            }
+          };
+          check();
+        });
+
+      const renderCastle = (castle) => {
+        const imageSrc = encodeURI(castle.imagen || "castillo.png");
+        const countryHref = `pais.html?nombre=${encodeURIComponent(
+          castle.pais
+        )}`;
+        const detailsLeft = [
+          { label: "País", value: castle.pais },
+          { label: "Región", value: castle.region },
+          { label: "Estilo", value: castle.estilo_arquitectonico },
+          {
+            label: "UNESCO",
+            value: castle.patrimonio_unesco === "True" ? "Sí" : "No",
+          },
+          { label: "Año", value: castle.anio_construccion },
+          { label: "Estado", value: castle.estado_actual },
+        ];
+
+        card.innerHTML = `
+          <figure class="castle-hero">
+            <img src="${imageSrc}" alt="Vista de ${castle.nombre}" loading="lazy" />
+          </figure>
+          <header>
+            <h1 class="castle-title">${castle.nombre}</h1>
+            <p class="castle-subtitle">
+              ${castle.region},
+              <a class="castle-country-link" href="${countryHref}">
+                ${castle.pais}
+              </a>
+              &mdash; ID ${castle.id}
+            </p>
+          </header>
+
+          <div class="details-columns">
+            <ul class="details-list">
+              ${detailsLeft
+                .map(
+                  (item) => `
+                <li>
+                  <span>${item.label}</span>
+                  <strong>${item.value ?? "No disponible"}</strong>
+                </li>
+              `
+                )
+                .join("")}
+            </ul>
+
+            <div class="details-summary">
+              <h2>Resumen</h2>
+              <p>
+                Material principal: <strong>${castle.tipo_material}</strong>.
+                Visitantes estimados: <strong>${castle.visitantes_anuales}</strong>
+                personas al año.
+              </p>
+              <p>
+                Coordenadas geográficas:
+                <strong>${castle.latitud}, ${castle.longitud}</strong>.
+              </p>
+            </div>
+          </div>
+        `;
+      };
+
+      const bootstrap = async () => {
+        if (!castleId) {
+          renderError("No se especificó ningún castillo.");
+          return;
+        }
+
+        try {
+          const dataset = await waitForDataset();
+          const castle = dataset.find((entry) => entry.id === castleId);
+          if (!castle) {
+            renderError("Castillo no encontrado.");
+            return;
+          }
+          renderCastle(castle);
+        } catch (error) {
+          renderError(error.message);
+        }
+      };
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bootstrap);
+      } else {
+        bootstrap();
+      }
+    </script>
+  </body>
+</html>
