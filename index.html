@@ -1,0 +1,295 @@
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Castillos de Europa</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <h1 class="hero__title">Atlas interactivo de castillos europeos</h1>
+      <p class="hero__lead">
+        Explora más de 10&nbsp;000 castillos en todo el continente, filtra por
+        país, estilo y pertenencia a UNESCO, y planifica tu próxima visita con
+        datos reales extraídos de la base <strong>castillos_europa_10000</strong>.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section
+        class="section-card section-card--intro"
+        aria-labelledby="intro-title"
+      >
+        <h2 id="intro-title" class="section-card__title">
+          ¿Cómo utilizar este mapa vivo?
+        </h2>
+        <p>
+          Usa los filtros para acotar la lista de fortalezas. El buscador admite
+          coincidencias parciales por nombre, mientras que los selectores de
+          país, estilo arquitectónico y UNESCO se generan automáticamente a partir
+          de los datos reales. Cada registro incluye un acceso directo a una ficha
+          individual donde podrás ampliar información antes de preparar tu ruta.
+        </p>
+      </section>
+
+      <section class="section-card section-card--explore">
+        <h2 class="section-card__title">Explorar castillos</h2>
+        <div class="filters" role="search">
+          <div>
+            <label for="search">Buscar por nombre</label>
+            <input
+              id="search"
+              type="text"
+              placeholder="Ej. Neuschwanstein"
+              autocomplete="off"
+            />
+          </div>
+          <div>
+            <label for="country-filter">País</label>
+            <select id="country-filter">
+              <option value="all">Todos</option>
+            </select>
+          </div>
+          <div>
+            <label for="style-filter">Estilo</label>
+            <select id="style-filter">
+              <option value="all">Todos</option>
+            </select>
+          </div>
+          <div>
+            <label for="unesco-filter">UNESCO</label>
+            <select id="unesco-filter">
+              <option value="all">Todos</option>
+              <option value="true">Sí</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="status-bar">
+          <div id="results-count">Cargando registros…</div>
+          <div class="pagination" aria-label="Paginación de la tabla">
+            <button type="button" id="prev-page" disabled>&larr; Anterior</button>
+            <span id="pagination-info">Página 1</span>
+            <button type="button" id="next-page" disabled>Siguiente &rarr;</button>
+          </div>
+        </div>
+
+        <div class="table-shell" aria-live="polite">
+          <div class="loader" id="loader">Preparando datos…</div>
+          <table class="data-table" id="castles-table" hidden>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>País</th>
+                <th>UNESCO</th>
+                <th>Estilo</th>
+                <th>Ficha</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="castillos-data.js"></script>
+    <script src="imagenes-castillos.js"></script>
+    <script>
+      const state = {
+        data: [],
+        filtered: [],
+        page: 1,
+        pageSize: 25,
+      };
+
+      const elements = {
+        search: document.getElementById("search"),
+        country: document.getElementById("country-filter"),
+        style: document.getElementById("style-filter"),
+        unesco: document.getElementById("unesco-filter"),
+        resultsCount: document.getElementById("results-count"),
+        paginationInfo: document.getElementById("pagination-info"),
+        prevPage: document.getElementById("prev-page"),
+        nextPage: document.getElementById("next-page"),
+        table: document.getElementById("castles-table"),
+        tbody: document.querySelector("#castles-table tbody"),
+        loader: document.getElementById("loader"),
+      };
+
+      const formatUnesco = (value) => (value === "True" ? "Sí" : "No");
+
+      const waitForDataset = (timeout = 10000) =>
+        new Promise((resolve, reject) => {
+          const start = performance.now();
+          const check = () => {
+            if (Array.isArray(window.CASTLES_DATA)) {
+              resolve(window.CASTLES_DATA);
+            } else if (performance.now() - start >= timeout) {
+              reject(new Error("No se pudo cargar la base de datos."));
+            } else {
+              requestAnimationFrame(check);
+            }
+          };
+          check();
+        });
+
+      const populateSelect = (selectEl, values) => {
+        const fragment = document.createDocumentFragment();
+        values
+          .sort((a, b) => a.localeCompare(b, "es"))
+          .forEach((value) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = value;
+            fragment.appendChild(option);
+          });
+        selectEl.appendChild(fragment);
+      };
+
+      const updatePaginationControls = () => {
+        const totalPages = Math.max(
+          1,
+          Math.ceil(state.filtered.length / state.pageSize)
+        );
+        state.page = Math.min(state.page, totalPages);
+        elements.paginationInfo.textContent = `Página ${state.page} de ${totalPages}`;
+        elements.prevPage.disabled = state.page === 1;
+        elements.nextPage.disabled = state.page === totalPages;
+      };
+
+      const renderTable = () => {
+        if (!state.filtered.length) {
+          elements.tbody.innerHTML =
+            '<tr><td colspan="5">No se encontraron castillos con esos criterios.</td></tr>';
+          elements.resultsCount.textContent = "Sin resultados";
+          updatePaginationControls();
+          return;
+        }
+
+        const start = (state.page - 1) * state.pageSize;
+        const end = start + state.pageSize;
+        const pageData = state.filtered.slice(start, end);
+
+        elements.tbody.innerHTML = pageData
+          .map(
+            (castle) => `
+          <tr>
+            <td class="castle-name">
+              <img src="${encodeURI(castle.imagen)}" alt="Castillo ${castle.nombre}" class="castle-thumb" />
+              <span>${castle.nombre}</span>
+            </td>
+            <td>${castle.pais}</td>
+            <td>${formatUnesco(castle.patrimonio_unesco)}</td>
+            <td>${castle.estilo_arquitectonico}</td>
+            <td>
+              <button class="details-btn" data-id="${castle.id}">
+                Ver ficha
+              </button>
+            </td>
+          </tr>
+        `
+          )
+          .join("");
+
+        elements.resultsCount.textContent = `Mostrando ${
+          start + 1
+        }–${Math.min(end, state.filtered.length)} de ${
+          state.filtered.length
+        } castillos`;
+        updatePaginationControls();
+      };
+
+      const applyFilters = () => {
+        const searchTerm = elements.search.value.trim().toLowerCase();
+        const country = elements.country.value;
+        const style = elements.style.value;
+        const unesco = elements.unesco.value;
+
+        state.filtered = state.data.filter((castle) => {
+          const matchesSearch = castle.nombre
+            .toLowerCase()
+            .includes(searchTerm);
+          const matchesCountry =
+            country === "all" || castle.pais === country;
+          const matchesStyle =
+            style === "all" || castle.estilo_arquitectonico === style;
+          const matchesUnesco =
+            unesco === "all" ||
+            String(castle.patrimonio_unesco === "True") === unesco;
+          return (
+            matchesSearch &&
+            matchesCountry &&
+            matchesStyle &&
+            matchesUnesco
+          );
+        });
+
+        state.page = 1;
+        renderTable();
+      };
+
+      const handleTableClick = (event) => {
+        const button = event.target.closest(".details-btn");
+        if (!button) return;
+        const castleId = button.dataset.id;
+        window.location.href = `detalle.html?id=${encodeURIComponent(
+          castleId
+        )}`;
+      };
+
+      const init = async () => {
+        try {
+          const dataset = await waitForDataset();
+          state.data = dataset;
+
+          const uniqueCountries = [
+            ...new Set(state.data.map((item) => item.pais)),
+          ];
+          const uniqueStyles = [
+            ...new Set(state.data.map((item) => item.estilo_arquitectonico)),
+          ];
+          populateSelect(elements.country, uniqueCountries);
+          populateSelect(elements.style, uniqueStyles);
+
+          elements.loader.hidden = true;
+          elements.table.hidden = false;
+          state.filtered = [...state.data];
+          renderTable();
+        } catch (error) {
+          elements.loader.textContent = error.message;
+        }
+      };
+
+      elements.search.addEventListener("input", () => {
+        state.page = 1;
+        applyFilters();
+      });
+      elements.country.addEventListener("change", applyFilters);
+      elements.style.addEventListener("change", applyFilters);
+      elements.unesco.addEventListener("change", applyFilters);
+      elements.prevPage.addEventListener("click", () => {
+        if (state.page > 1) {
+          state.page -= 1;
+          renderTable();
+        }
+      });
+      elements.nextPage.addEventListener("click", () => {
+        const totalPages = Math.ceil(
+          state.filtered.length / state.pageSize
+        );
+        if (state.page < totalPages) {
+          state.page += 1;
+          renderTable();
+        }
+      });
+      document
+        .querySelector(".table-shell")
+        .addEventListener("click", handleTableClick);
+
+      init();
+    </script>
+  </body>
+</html>
