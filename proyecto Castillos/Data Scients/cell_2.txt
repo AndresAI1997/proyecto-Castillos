@@ -1,0 +1,4 @@
+# Cargar archivo TSV de castillos
+df = pd.read_csv("castillos_europa_10000.tsv", sep="\t")
+print("Dimensiones del dataset:", df.shape)
+df.head()

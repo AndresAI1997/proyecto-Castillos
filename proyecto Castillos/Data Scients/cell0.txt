@@ -1,0 +1,22 @@
+# Predicción de interés turístico en castillos europeos 🏰
+
+## Objetivo
+
+El objetivo de este proyecto es **predecir el interés turístico de castillos europeos**, medido como una variable sintética de **visitantes anuales modelados**, a partir de sus características:
+
+- País
+- Región
+- Año de construcción
+- Estilo arquitectónico
+- Tipo de material
+- Estado actual
+- Patrimonio UNESCO
+- Ubicación (latitud / longitud)
+
+Se utiliza un **modelo de Machine Learning supervisado (Random Forest Regressor)** para:
+
+- Predecir el nivel de visitas esperado
+- Identificar los factores que más influyen en el turismo de castillos
+- Obtener insights accionables sobre qué características se asocian a un mayor interés turístico
+
+El dataset base contiene **10.000 castillos europeos sintéticos**, con información estructurada apta para análisis y modelado.
